@@ -1,9 +1,31 @@
 contacts = {}
 
+def load_from_csv():
+    try:
+        with open("contacts.csv", "r") as file:
+            reader = csv.reader(file)
+            next(reader)
+
+            for row in reader:
+                name, number = row
+                contacts[name] = number
+    except FileNotFoundError:
+        pass
+    
+
+def save_to_csv():
+    with open("contacts.csv", "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Name", "Number"])
+
+        for name, number in contacts.items():
+            writer.writerow([name, number])
+
 def add_contact():
     name = input("Namn: ")
     number = input("Nummer: ")
     contacts[name] = number
+    save_to_csv()
     print("Kontakt sparad.\n")
 
 def show_contacts():
