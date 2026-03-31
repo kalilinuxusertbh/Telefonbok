@@ -1,4 +1,5 @@
 contacts = {}
+import csv
 
 def load_from_csv():
     try:
