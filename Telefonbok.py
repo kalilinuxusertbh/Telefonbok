@@ -8,8 +8,9 @@ def load_from_csv():
             next(reader)
 
             for row in reader:
-                name, number = row
-                contacts[name] = number
+                if len(row) == 2:  # safety
+                    name, number = row
+                    contacts[name] = number
     except FileNotFoundError:
         pass
     
@@ -22,34 +23,57 @@ def save_to_csv():
         for name, number in contacts.items():
             writer.writerow([name, number])
 
+
 def add_contact():
-    name = input("Namn: ")
-    number = input("Nummer: ")
+    name = input("Namn: ").strip()
+    number = input("Nummer: ").strip()
+
+    if name == "" or number == "":
+        print("Fel: tom input.\n")
+        return
+
     contacts[name] = number
     save_to_csv()
     print("Kontakt sparad.\n")
+
 
 def show_contacts():
     if not contacts:
         print("Inga kontakter.\n")
         return
+
     for name, number in contacts.items():
         print(f"{name}: {number}")
     print()
 
+
 def search_contact():
-    name = input("Sök namn: ")
+    name = input("Sök namn: ").strip()
+
     if name in contacts:
         print(f"{name}: {contacts[name]}\n")
     else:
         print("Hittades inte.\n")
+
+
+def delete_contact():
+    name = input("Ta bort namn: ").strip()
+
+    if name in contacts:
+        del contacts[name]
+        save_to_csv()
+        print("Kontakt borttagen.\n")
+    else:
+        print("Finns inte.\n")
+
 
 def menu():
     while True:
         print("1. Lägg till kontakt")
         print("2. Visa alla kontakter")
         print("3. Sök kontakt")
-        print("4. Avsluta")
+        print("4. Ta bort kontakt")
+        print("5. Avsluta")
 
         choice = input("Välj: ")
 
@@ -60,8 +84,14 @@ def menu():
         elif choice == "3":
             search_contact()
         elif choice == "4":
+            delete_contact()
+        elif choice == "5":
             break
         else:
             print("Fel val.\n")
+
+
+# 🔥 viktigt: load först
+load_from_csv()
 
 menu()
