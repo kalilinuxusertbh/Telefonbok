@@ -8,7 +8,7 @@ def load_from_csv():
             next(reader)
 
             for row in reader:
-                if len(row) == 2:  # safety
+                if len(row) == 2:
                     name, number = row
                     contacts[name] = number
     except FileNotFoundError:
@@ -42,18 +42,26 @@ def show_contacts():
         print("Inga kontakter.\n")
         return
 
-    for name, number in contacts.items():
-        print(f"{name}: {number}")
+    print(f"Totalt kontakter: {len(contacts)}\n")
+
+    for name in sorted(contacts):
+        print(f"{name}: {contacts[name]}")
     print()
 
 
 def search_contact():
-    name = input("Sök namn: ").strip()
+    search = input("Sök namn: ").strip().lower()
 
-    if name in contacts:
-        print(f"{name}: {contacts[name]}\n")
-    else:
+    found = False
+    for name, number in contacts.items():
+        if search in name.lower():
+            print(f"{name}: {number}")
+            found = True
+
+    if not found:
         print("Hittades inte.\n")
+    else:
+        print()
 
 
 def delete_contact():
@@ -67,13 +75,31 @@ def delete_contact():
         print("Finns inte.\n")
 
 
+def edit_contact():
+    name = input("Vilken kontakt vill du ändra?: ").strip()
+
+    if name in contacts:
+        new_number = input("Nytt nummer: ").strip()
+
+        if new_number == "":
+            print("Fel: tom input.\n")
+            return
+
+        contacts[name] = new_number
+        save_to_csv()
+        print("Kontakt uppdaterad.\n")
+    else:
+        print("Finns inte.\n")
+
+
 def menu():
     while True:
         print("1. Lägg till kontakt")
         print("2. Visa alla kontakter")
         print("3. Sök kontakt")
         print("4. Ta bort kontakt")
-        print("5. Avsluta")
+        print("5. Ändra kontakt")
+        print("6. Avsluta")
 
         choice = input("Välj: ")
 
@@ -86,12 +112,12 @@ def menu():
         elif choice == "4":
             delete_contact()
         elif choice == "5":
+            edit_contact()
+        elif choice == "6":
             break
         else:
             print("Fel val.\n")
 
 
-# 🔥 viktigt: load först
 load_from_csv()
-
 menu()
