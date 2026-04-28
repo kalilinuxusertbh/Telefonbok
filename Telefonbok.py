@@ -1,6 +1,7 @@
 contacts = {}
 import csv
 
+
 def load_from_csv():
     try:
         with open("contacts.csv", "r") as file:
@@ -13,15 +14,18 @@ def load_from_csv():
                     contacts[name] = number
     except FileNotFoundError:
         pass
-    
+
 
 def save_to_csv():
-    with open("contacts.csv", "w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["Name", "Number"])
+    try:
+        with open("contacts.csv", "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Name", "Number"])
 
-        for name, number in contacts.items():
-            writer.writerow([name, number])
+            for name, number in contacts.items():
+                writer.writerow([name, number])
+    except Exception as e:
+        print("Kunde inte spara:", e)
 
 
 def add_contact():
@@ -30,6 +34,10 @@ def add_contact():
 
     if name == "" or number == "":
         print("Fel: tom input.\n")
+        return
+
+    if name in contacts:
+        print("Finns redan, använd ändra istället.\n")
         return
 
     contacts[name] = number
@@ -42,7 +50,7 @@ def show_contacts():
         print("Inga kontakter.\n")
         return
 
-    print(f"Totalt kontakter: {len(contacts)}\n")
+    print(f"\nTotalt kontakter: {len(contacts)}\n")
 
     for name in sorted(contacts):
         print(f"{name}: {contacts[name]}")
@@ -52,16 +60,19 @@ def show_contacts():
 def search_contact():
     search = input("Sök namn: ").strip().lower()
 
-    found = False
+    results = []
+
     for name, number in contacts.items():
         if search in name.lower():
-            print(f"{name}: {number}")
-            found = True
+            results.append((name, number))
 
-    if not found:
+    if not results:
         print("Hittades inte.\n")
-    else:
-        print()
+        return
+
+    for name, number in results:
+        print(f"{name}: {number}")
+    print()
 
 
 def delete_contact():
@@ -92,14 +103,21 @@ def edit_contact():
         print("Finns inte.\n")
 
 
+def stats():
+    print(f"\nTotalt kontakter: {len(contacts)}")
+    print("Fil: contacts.csv\n")
+
+
 def menu():
     while True:
+        print("\n--- TELEFONBOK ---")
         print("1. Lägg till kontakt")
         print("2. Visa alla kontakter")
         print("3. Sök kontakt")
         print("4. Ta bort kontakt")
         print("5. Ändra kontakt")
-        print("6. Avsluta")
+        print("6. Statistik")
+        print("7. Avsluta")
 
         choice = input("Välj: ")
 
@@ -114,6 +132,8 @@ def menu():
         elif choice == "5":
             edit_contact()
         elif choice == "6":
+            stats()
+        elif choice == "7":
             break
         else:
             print("Fel val.\n")
