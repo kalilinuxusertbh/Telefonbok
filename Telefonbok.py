@@ -1,5 +1,7 @@
 contacts = {}
+
 import csv
+from playsound import playsound
 
 
 def load_from_csv():
@@ -103,6 +105,23 @@ def edit_contact():
         print("Finns inte.\n")
 
 
+def fake_call():
+    name = input("Vem vill du ringa?: ").strip()
+
+    if name not in contacts:
+        print("Kontakten finns inte.\n")
+        return
+
+    print(f"\nRinger {name}...")
+    print(f"Nummer: {contacts[name]}")
+    print("Ringer...\n")
+
+    try:
+        playsound("ringtone.mp3")
+    except:
+        print("Kunde inte spela ringtone.mp3")
+
+
 def stats():
     print(f"\nTotalt kontakter: {len(contacts)}")
     print("Fil: contacts.csv\n")
@@ -117,7 +136,8 @@ def menu():
         print("4. Ta bort kontakt")
         print("5. Ändra kontakt")
         print("6. Statistik")
-        print("7. Avsluta")
+        print("7. Ring")
+        print("8. Avsluta")
 
         choice = input("Välj: ")
 
@@ -134,6 +154,8 @@ def menu():
         elif choice == "6":
             stats()
         elif choice == "7":
+            fake_call()
+        elif choice == "8":
             break
         else:
             print("Fel val.\n")
