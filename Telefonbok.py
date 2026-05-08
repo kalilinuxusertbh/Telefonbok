@@ -1,15 +1,13 @@
 import tkinter as tk
 from tkinter import messagebox
-from playsound import playsound
 import threading
 import time
 import random
 import csv
+import pygame
 
 contacts = {}
 
-
-#csv
 def load_from_csv():
     try:
         with open("contacts.csv", "r") as file:
@@ -36,8 +34,7 @@ def save_to_csv():
 
 load_from_csv()
 
-
-# fönster
+pygame.mixer.init()
 
 root = tk.Tk()
 root.title("GhostOS Mobile")
@@ -46,86 +43,133 @@ root.configure(bg="black")
 
 current_time = tk.StringVar()
 
-
-# tid
-
 def update_time():
     while True:
         current_time.set(time.strftime("%H:%M"))
         time.sleep(1)
 
-
 threading.Thread(target=update_time, daemon=True).start()
-
-
-# ring
 
 def fake_call(name, number):
     call_screen = tk.Frame(root, bg="black")
     call_screen.place(relwidth=1, relheight=1)
 
-    caller = tk.Label(
+    tk.Label(
         call_screen,
         text=name,
         fg="white",
         bg="black",
         font=("Arial", 40, "bold")
-    )
-    caller.pack(pady=100)
+    ).pack(pady=100)
 
-    number_label = tk.Label(
+    tk.Label(
         call_screen,
         text=number,
         fg="gray",
         bg="black",
         font=("Arial", 20)
-    )
-    number_label.pack()
+    ).pack()
 
-    status = tk.Label(
+    tk.Label(
         call_screen,
         text="Calling...",
         fg="lime",
         bg="black",
         font=("Arial", 20)
-    )
-    status.pack(pady=20)
+    ).pack(pady=20)
 
-    def ringtone():
-        try:
-            playsound("ringtone.mp3")
-        except:
-            print("kunde inte spela mp3")
+    def stop_call():
+        pygame.mixer.music.stop()
+        call_screen.destroy()
 
-    threading.Thread(target=ringtone, daemon=True).start()
+    try:
+        pygame.mixer.music.load("ringtone.mp3")
+        pygame.mixer.music.play()
+    except Exception:
+        print("kunde inte spela mp3")
 
-    end_button = tk.Button(
+    tk.Button(
         call_screen,
-        text="END CALL",
+        text="LÄGG PÅ",
         bg="red",
         fg="white",
         font=("Arial", 20, "bold"),
         width=15,
         height=2,
-        command=call_screen.destroy
-    )
-    end_button.pack(side="bottom", pady=80)
+        command=stop_call
+    ).pack(side="bottom", pady=80)
 
+def open_ring_menu():
+    ring_menu = tk.Frame(root, bg="#000000")
+    ring_menu.place(relwidth=1, relheight=1)
 
-# kontakter
+    tk.Label(
+        ring_menu,
+        text="VÄLJ VEM DU VILL RINGA",
+        fg="lime",
+        bg="black",
+        font=("Arial", 25, "bold")
+    ).pack(pady=30)
+
+    if not contacts:
+        tk.Label(
+            ring_menu,
+            text="Inga kontakter",
+            fg="gray",
+            bg="black",
+            font=("Arial", 18)
+        ).pack()
+    else:
+        for name, number in contacts.items():
+            tk.Button(
+                ring_menu,
+                text=f"{name} - {number}",
+                bg="#222222",
+                fg="white",
+                font=("Arial", 16),
+                width=30,
+                command=lambda n=name, num=number: fake_call(n, num)
+            ).pack(pady=5)
+
+    tk.Button(
+        ring_menu,
+        text="BACK",
+        bg="red",
+        fg="white",
+        font=("Arial", 18),
+        command=ring_menu.destroy
+    ).pack(pady=40)
 
 def open_contacts():
     contacts_screen = tk.Frame(root, bg="#111111")
     contacts_screen.place(relwidth=1, relheight=1)
 
-    title = tk.Label(
+    tk.Label(
         contacts_screen,
-        text="CONTACTS",
+        text="KONTAKTER",
         fg="white",
         bg="#111111",
         font=("Arial", 30, "bold")
+    ).pack(pady=20)
+
+    search_var = tk.StringVar()
+
+    tk.Label(
+        contacts_screen,
+        text="SÖK KONTAKT",
+        fg="white",
+        bg="#111111",
+        font=("Arial", 14, "bold")
+    ).pack()
+
+    search_entry = tk.Entry(
+        contacts_screen,
+        textvariable=search_var,
+        font=("Arial", 16),
+        width=25,
+        fg="black"
     )
-    title.pack(pady=20)
+    search_entry.pack(pady=10)
 
     contacts_frame = tk.Frame(contacts_screen, bg="#111111")
     contacts_frame.pack()
@@ -134,59 +178,100 @@ def open_contacts():
         for widget in contacts_frame.winfo_children():
             widget.destroy()
 
+        search_text = search_var.get().strip().lower()
+        filtered_contacts = {
+            name: number
+            for name, number in contacts.items()
+            if search_text in name.lower() or search_text in number.lower()
+        }
+
         if not contacts:
-            no_contacts = tk.Label(
+            tk.Label(
                 contacts_frame,
                 text="Inga kontakter",
                 fg="gray",
                 bg="#111111",
                 font=("Arial", 20)
-            )
-            no_contacts.pack()
+            ).pack()
+            return
 
-        for name, number in contacts.items():
+        if not filtered_contacts:
+            tk.Label(
+                contacts_frame,
+                text="Ingen kontakt hittades",
+                fg="gray",
+                bg="#111111",
+                font=("Arial", 20)
+            ).pack()
+            return
 
+        for name, number in filtered_contacts.items():
             row = tk.Frame(contacts_frame, bg="#111111")
             row.pack(pady=5)
 
-            call_btn = tk.Button(
+            tk.Label(
                 row,
-                text=f" {name} - {number}",
+                text=f"{name} - {number}",
                 bg="#222222",
                 fg="white",
                 font=("Arial", 16),
                 width=25,
-                command=lambda n=name, num=number: fake_call(n, num)
-            )
-            call_btn.pack(side="left", padx=5)
+            ).pack(side="left", padx=5)
 
-            delete_btn = tk.Button(
+            tk.Button(
                 row,
                 text="❌",
                 bg="red",
                 fg="white",
                 font=("Arial", 12),
                 command=lambda n=name: delete_contact_gui(n, refresh_contacts)
-            )
-            delete_btn.pack(side="left")
+            ).pack(side="left")
 
-    refresh_contacts()
+    search_var.trace_add("write", lambda *args: refresh_contacts())
 
     add_frame = tk.Frame(contacts_screen, bg="#111111")
-    add_frame.pack(pady=20)
+    add_frame.pack(pady=25)
 
-    name_entry = tk.Entry(add_frame, font=("Arial", 16))
-    name_entry.grid(row=0, column=0, padx=10)
+    tk.Label(
+        add_frame,
+        text="LÄGG TILL KONTAKT",
+        fg="white",
+        bg="#111111",
+        font=("Arial", 16, "bold")
+    ).pack(pady=5)
 
-    number_entry = tk.Entry(add_frame, font=("Arial", 16))
-    number_entry.grid(row=0, column=1, padx=10)
+    form = tk.Frame(add_frame, bg="#111111")
+    form.pack()
 
-    def add_contact_gui():
+    name_entry = tk.Entry(form, font=("Arial", 16), width=20, fg="black")
+    name_entry.insert(0, "Namn")
+    name_entry.grid(row=0, column=0, padx=5)
+
+    number_entry = tk.Entry(form, font=("Arial", 16), width=20, fg="black")
+    number_entry.insert(0, "Nummer")
+    number_entry.grid(row=0, column=1, padx=5)
+
+    def clear_name(event):
+        if name_entry.get() == "Namn":
+            name_entry.delete(0, tk.END)
+
+    def clear_number(event):
+        if number_entry.get() == "Nummer":
+            number_entry.delete(0, tk.END)
+
+    name_entry.bind("<FocusIn>", clear_name)
+    number_entry.bind("<FocusIn>", clear_number)
+
+    def add_contact_gui(event=None):
         name = name_entry.get().strip()
         number = number_entry.get().strip()
 
-        if name == "" or number == "":
-            messagebox.showerror("Error", "Empty input")
+        if name == "" or number == "" or name == "Namn" or number == "Nummer":
+            messagebox.showerror("Error", "Fyll i båda fälten")
+            return
+
+        if name in contacts:
+            messagebox.showerror("Error", "Kontakt finns redan")
             return
 
         contacts[name] = number
@@ -195,66 +280,63 @@ def open_contacts():
         name_entry.delete(0, tk.END)
         number_entry.delete(0, tk.END)
 
+        name_entry.insert(0, "Namn")
+        number_entry.insert(0, "Nummer")
+
         refresh_contacts()
 
-    add_btn = tk.Button(
+    tk.Button(
         add_frame,
-        text="LÄGG TILL",
+        text="ADD",
         bg="lime",
         fg="black",
         font=("Arial", 14, "bold"),
+        width=15,
         command=add_contact_gui
-    )
-    add_btn.grid(row=0, column=2, padx=10)
+    ).pack(pady=10)
 
-    back = tk.Button(
+    number_entry.bind("<Return>", add_contact_gui)
+
+    def delete_contact_gui(name, refresh_function):
+        if name in contacts:
+            del contacts[name]
+            save_to_csv()
+            refresh_function()
+
+    refresh_contacts()
+
+    tk.Button(
         contacts_screen,
         text="BACK",
         bg="gray",
         fg="white",
         font=("Arial", 18),
         command=contacts_screen.destroy
-    )
-    back.pack(side="bottom", pady=20)
-
-
-#ta bort
-
-def delete_contact_gui(name, refresh_function):
-    if name in contacts:
-        del contacts[name]
-        save_to_csv()
-        refresh_function()
-
-
+    ).pack(side="bottom", pady=20)
 
 topbar = tk.Frame(root, bg="#111111", height=50)
 topbar.pack(fill="x")
 
-time_label = tk.Label(
+tk.Label(
     topbar,
     textvariable=current_time,
     fg="white",
     bg="#111111",
     font=("Arial", 20)
-)
-time_label.pack(side="right", padx=20)
-
-
+).pack(side="right", padx=20)
 
 home = tk.Frame(root, bg="black")
 home.pack(expand=True)
 
-title = tk.Label(
+tk.Label(
     home,
     text="MioOS",
     fg="lime",
     bg="black",
     font=("Arial", 45, "bold")
-)
-title.pack(pady=50)
+).pack(pady=50)
 
-phone_button = tk.Button(
+tk.Button(
     home,
     text="KONTAKTER",
     bg="#1f1f1f",
@@ -263,10 +345,20 @@ phone_button = tk.Button(
     width=18,
     height=3,
     command=open_contacts
-)
-phone_button.pack(pady=20)
+).pack(pady=20)
 
-stats_button = tk.Button(
+tk.Button(
+    home,
+    text="RING KONTAKTER",
+    bg="#1f1f1f",
+    fg="white",
+    font=("Arial", 20),
+    width=25,
+    height=2,
+    command=open_ring_menu
+).pack(pady=10)
+
+tk.Button(
     home,
     text=f"TOTALA KONTAKTER: {len(contacts)}",
     bg="#1f1f1f",
@@ -274,10 +366,9 @@ stats_button = tk.Button(
     font=("Arial", 20),
     width=25,
     height=2
-)
-stats_button.pack(pady=20)
+).pack(pady=20)
 
-exit_button = tk.Button(
+tk.Button(
     home,
     text="EXIT",
     bg="red",
@@ -285,7 +376,6 @@ exit_button = tk.Button(
     font=("Arial", 20),
     width=10,
     command=root.destroy
-)
-exit_button.pack(pady=50)
+).pack(pady=50)
 
 root.mainloop()
