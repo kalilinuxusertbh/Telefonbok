@@ -20,22 +20,36 @@ def load_from_csv():
         return
 
     with CONTACTS_FILE.open("r", newline="", encoding="utf-8") as file:
-        reader = csv.reader(file)
-        next(reader, None)
+        reader = csv.DictReader(file)
 
         for row in reader:
-            if len(row) == 2:
-                name, number = row
-                contacts[name] = number
+            name = (row.get("Name") or "").strip()
+            number = (row.get("Number") or "").strip()
+
+            if name and number:
+                contacts[name] = {
+                    "number": number,
+                    "email": (row.get("Email") or "").strip(),
+                    "tag": (row.get("Tag") or "MioOS kontakt").strip(),
+                    "notes": (row.get("Notes") or "").strip(),
+                }
 
 
 def save_to_csv():
     with CONTACTS_FILE.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["Name", "Number"])
+        writer.writerow(["Name", "Number", "Email", "Tag", "Notes"])
 
-        for name, number in contacts.items():
-            writer.writerow([name, number])
+        for name, details in contacts.items():
+            writer.writerow(
+                [
+                    name,
+                    details.get("number", ""),
+                    details.get("email", ""),
+                    details.get("tag", ""),
+                    details.get("notes", ""),
+                ]
+            )
 
 
 def update_total_contacts():
@@ -151,7 +165,8 @@ def open_ring_menu():
             font=("Arial", 18),
         ).pack()
     else:
-        for name, number in contacts.items():
+        for name, details in contacts.items():
+            number = details.get("number", "")
             tk.Button(
                 ring_menu,
                 text=f"{name} - {number}",
@@ -173,45 +188,319 @@ def open_ring_menu():
 
 
 def open_contacts():
-    contacts_screen = tk.Frame(root, bg="#111111")
+    contacts_screen = tk.Frame(root, bg="#050505")
     contacts_screen.place(relwidth=1, relheight=1)
 
+    header = tk.Frame(contacts_screen, bg="#050505")
+    header.pack(fill="x", padx=44, pady=(26, 12))
+
     tk.Label(
-        contacts_screen,
-        text="KONTAKTER",
+        header,
+        text="MioOS // Kontakter",
+        fg="lime",
+        bg="#050505",
+        font=("Arial", 13, "bold"),
+    ).pack(anchor="w")
+
+    tk.Label(
+        header,
+        text="KONTAKTBOK",
         fg="white",
-        bg="#111111",
-        font=("Arial", 30, "bold"),
-    ).pack(pady=20)
+        bg="#050505",
+        font=("Arial", 34, "bold"),
+    ).pack(anchor="w")
+
+    tk.Label(
+        header,
+        text="Spara nummer, mail och detaljer.",
+        fg="#8c8c8c",
+        bg="#050505",
+        font=("Arial", 13),
+    ).pack(anchor="w", pady=(2, 0))
+
+    tk.Label(
+        header,
+        textvariable=total_contacts,
+        fg="lime",
+        bg="#050505",
+        font=("Arial", 13, "bold"),
+    ).pack(anchor="e")
+
+    body = tk.Frame(contacts_screen, bg="#050505")
+    body.pack(fill="both", expand=True, padx=44, pady=10)
+
+    left_panel = tk.Frame(body, bg="#101010", bd=1, relief="solid")
+    left_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
+
+    right_panel = tk.Frame(body, bg="#151515", bd=1, relief="solid", width=430)
+    right_panel.pack(side="right", fill="y")
+    right_panel.pack_propagate(False)
+
+    tk.Label(
+        left_panel,
+        text="SYSTEMREGISTER",
+        fg="#d8d8d8",
+        bg="#101010",
+        font=("Arial", 16, "bold"),
+    ).pack(anchor="w", padx=18, pady=(16, 4))
 
     search_var = tk.StringVar()
+    selected_contact = tk.StringVar()
+
+    search_shell = tk.Frame(left_panel, bg="#1d1d1d")
+    search_shell.pack(fill="x", padx=18, pady=(6, 12))
 
     tk.Label(
-        contacts_screen,
-        text="SÖK KONTAKT",
-        fg="white",
-        bg="#111111",
-        font=("Arial", 14, "bold"),
-    ).pack()
+        search_shell,
+        text="SÖK",
+        fg="lime",
+        bg="#1d1d1d",
+        font=("Arial", 11, "bold"),
+    ).pack(side="left", padx=(12, 8), pady=10)
 
     search_entry = tk.Entry(
-        contacts_screen,
+        search_shell,
         textvariable=search_var,
-        font=("Arial", 16),
-        width=25,
-        fg="black",
+        font=("Arial", 14),
+        fg="white",
+        bg="#1d1d1d",
+        insertbackground="lime",
+        relief="flat",
     )
-    search_entry.pack(pady=10)
+    search_entry.pack(side="left", fill="x", expand=True, padx=(0, 12), pady=10)
 
-    contacts_frame = tk.Frame(contacts_screen, bg="#111111")
-    contacts_frame.pack()
+    contacts_frame = tk.Frame(left_panel, bg="#101010")
+    contacts_frame.pack(fill="both", expand=True, padx=18, pady=(0, 14))
 
-    def delete_contact_gui(name, refresh_function):
+    profile_header = tk.Frame(right_panel, bg="#151515")
+    profile_header.pack(fill="x", padx=22, pady=(20, 8))
+
+    avatar_label = tk.Label(
+        profile_header,
+        text="?",
+        fg="black",
+        bg="lime",
+        font=("Arial", 34, "bold"),
+        width=3,
+        height=1,
+    )
+    avatar_label.pack(side="left", padx=(0, 14))
+
+    title_stack = tk.Frame(profile_header, bg="#151515")
+    title_stack.pack(side="left", fill="x", expand=True)
+
+    profile_name = tk.Label(
+        title_stack,
+        text="Ny kontakt",
+        fg="white",
+        bg="#151515",
+        font=("Arial", 23, "bold"),
+        anchor="w",
+    )
+    profile_name.pack(anchor="w")
+
+    profile_tag = tk.Label(
+        title_stack,
+        text="MioOS identitet",
+        fg="#8f8f8f",
+        bg="#151515",
+        font=("Arial", 12),
+        anchor="w",
+    )
+    profile_tag.pack(anchor="w")
+
+    form = tk.Frame(right_panel, bg="#151515")
+    form.pack(fill="both", expand=True, padx=22, pady=8)
+    form.columnconfigure(0, weight=1)
+    form.rowconfigure(9, weight=1)
+
+    fields = {}
+    placeholders = {
+        "name": "Namn",
+        "number": "Nummer",
+        "email": "mail@exempel.se",
+        "tag": "Familj, kompis, jobb...",
+        "notes": "Sma detaljer som MioOS ska komma ihag.",
+    }
+
+    def make_field(label, placeholder, row, height=1):
+        tk.Label(
+            form,
+            text=label,
+            fg="lime",
+            bg="#151515",
+            font=("Arial", 11, "bold"),
+        ).grid(row=row, column=0, sticky="w", pady=(10, 3))
+
+        if height == 1:
+            entry = tk.Entry(
+                form,
+                font=("Arial", 14),
+                fg="white",
+                bg="#222222",
+                insertbackground="lime",
+                relief="flat",
+            )
+            entry.insert(0, placeholder)
+            entry.grid(row=row + 1, column=0, sticky="ew", ipady=8)
+        else:
+            entry = tk.Text(
+                form,
+                font=("Arial", 13),
+                fg="white",
+                bg="#222222",
+                insertbackground="lime",
+                relief="flat",
+                height=height,
+                wrap="word",
+            )
+            entry.insert("1.0", placeholder)
+            entry.grid(row=row + 1, column=0, sticky="nsew")
+
+        return entry
+
+    fields["name"] = make_field("NAMN", placeholders["name"], 0)
+    fields["number"] = make_field("NUMMER", placeholders["number"], 2)
+    fields["email"] = make_field("MAIL", placeholders["email"], 4)
+    fields["tag"] = make_field("SYSTEMTAGG", placeholders["tag"], 6)
+    fields["notes"] = make_field("ANTECKNINGAR", placeholders["notes"], 8, height=5)
+
+    def entry_value(widget):
+        if isinstance(widget, tk.Text):
+            return widget.get("1.0", tk.END).strip()
+        return widget.get().strip()
+
+    def set_entry(widget, value):
+        if isinstance(widget, tk.Text):
+            widget.delete("1.0", tk.END)
+            widget.insert("1.0", value)
+        else:
+            widget.delete(0, tk.END)
+            widget.insert(0, value)
+
+    def clear_form():
+        selected_contact.set("")
+        for key, placeholder in placeholders.items():
+            set_entry(fields[key], placeholder)
+        avatar_label.config(text="?", bg="lime")
+        profile_name.config(text="Ny kontakt")
+        profile_tag.config(text="MioOS identitet")
+
+    def select_contact(name):
+        details = contacts[name]
+        selected_contact.set(name)
+        set_entry(fields["name"], name)
+        set_entry(fields["number"], details.get("number", ""))
+        set_entry(fields["email"], details.get("email", ""))
+        set_entry(fields["tag"], details.get("tag", ""))
+        set_entry(fields["notes"], details.get("notes", ""))
+        avatar_label.config(text=name[:1].upper() or "?")
+        profile_name.config(text=name)
+        profile_tag.config(text=details.get("tag", "MioOS kontakt"))
+
+    def delete_selected():
+        name = selected_contact.get()
+        if not name:
+            messagebox.showerror("Error", "Valj en kontakt att ta bort")
+            return
+
         if name in contacts:
             del contacts[name]
             save_to_csv()
             update_total_contacts()
-            refresh_function()
+            clear_form()
+            refresh_contacts()
+
+    def call_selected():
+        name = selected_contact.get()
+        if not name:
+            messagebox.showerror("Error", "Valj en kontakt att ringa")
+            return
+
+        number = contacts.get(name, {}).get("number", "")
+        fake_call(name, number)
+
+    def save_contact_gui(event=None):
+        old_name = selected_contact.get()
+        name = entry_value(fields["name"])
+        number = entry_value(fields["number"])
+        email = entry_value(fields["email"])
+        tag = entry_value(fields["tag"])
+        notes = entry_value(fields["notes"])
+
+        if name in ("", placeholders["name"]) or number in ("", placeholders["number"]):
+            messagebox.showerror("Error", "Namn och nummer behovs")
+            return
+
+        if email == placeholders["email"]:
+            email = ""
+        if tag == placeholders["tag"]:
+            tag = "MioOS kontakt"
+        if notes == placeholders["notes"]:
+            notes = ""
+
+        if old_name and old_name != name:
+            contacts.pop(old_name, None)
+
+        if not old_name and name in contacts:
+            messagebox.showerror("Error", "Kontakt finns redan")
+            return
+
+        contacts[name] = {
+            "number": number,
+            "email": email,
+            "tag": tag or "MioOS kontakt",
+            "notes": notes,
+        }
+
+        selected_contact.set(name)
+        save_to_csv()
+        update_total_contacts()
+        select_contact(name)
+        refresh_contacts()
+
+    button_row = tk.Frame(right_panel, bg="#151515")
+    button_row.pack(fill="x", padx=22, pady=(0, 22))
+
+    tk.Button(
+        button_row,
+        text="NY",
+        bg="#2f2f2f",
+        fg="white",
+        font=("Arial", 12, "bold"),
+        width=9,
+        command=clear_form,
+    ).pack(side="left", padx=(0, 8))
+
+    tk.Button(
+        button_row,
+        text="SPARA",
+        bg="lime",
+        fg="black",
+        font=("Arial", 12, "bold"),
+        width=10,
+        command=save_contact_gui,
+    ).pack(side="left", padx=(0, 8))
+
+    tk.Button(
+        button_row,
+        text="RING",
+        bg="#202d20",
+        fg="lime",
+        font=("Arial", 12, "bold"),
+        width=9,
+        command=call_selected,
+    ).pack(side="left", padx=(0, 8))
+
+    tk.Button(
+        button_row,
+        text="RADERA",
+        bg="#421818",
+        fg="white",
+        font=("Arial", 12, "bold"),
+        width=10,
+        command=delete_selected,
+    ).pack(side="left")
 
     def refresh_contacts():
         for widget in contacts_frame.winfo_children():
@@ -219,130 +508,91 @@ def open_contacts():
 
         search_text = search_var.get().strip().lower()
         filtered_contacts = {
-            name: number
-            for name, number in contacts.items()
-            if search_text in name.lower() or search_text in number.lower()
+            name: details
+            for name, details in contacts.items()
+            if search_text in name.lower()
+            or search_text in details.get("number", "").lower()
+            or search_text in details.get("email", "").lower()
+            or search_text in details.get("tag", "").lower()
         }
 
         if not contacts:
             tk.Label(
                 contacts_frame,
-                text="Inga kontakter",
-                fg="gray",
-                bg="#111111",
-                font=("Arial", 20),
-            ).pack()
+                text="Inga kontakter i systemet",
+                fg="#777777",
+                bg="#101010",
+                font=("Arial", 18),
+            ).pack(pady=40)
             return
 
         if not filtered_contacts:
             tk.Label(
                 contacts_frame,
                 text="Ingen kontakt hittades",
-                fg="gray",
-                bg="#111111",
-                font=("Arial", 20),
-            ).pack()
+                fg="#777777",
+                bg="#101010",
+                font=("Arial", 18),
+            ).pack(pady=40)
             return
 
-        for name, number in filtered_contacts.items():
-            row = tk.Frame(contacts_frame, bg="#111111")
-            row.pack(pady=5)
+        for name, details in filtered_contacts.items():
+            row = tk.Frame(contacts_frame, bg="#181818", bd=1, relief="solid")
+            row.pack(fill="x", pady=5)
 
             tk.Label(
                 row,
-                text=f"{name} - {number}",
-                bg="#222222",
-                fg="white",
-                font=("Arial", 16),
-                width=25,
-            ).pack(side="left", padx=5)
+                text=name[:1].upper(),
+                bg="lime",
+                fg="black",
+                font=("Arial", 18, "bold"),
+                width=3,
+            ).pack(side="left", fill="y", padx=(10, 12), pady=10)
 
-            tk.Button(
-                row,
-                text="X",
-                bg="red",
+            info = tk.Frame(row, bg="#181818")
+            info.pack(side="left", fill="x", expand=True, pady=9)
+
+            tk.Label(
+                info,
+                text=name,
                 fg="white",
-                font=("Arial", 12),
-                command=lambda n=name: delete_contact_gui(n, refresh_contacts),
-            ).pack(side="left")
+                bg="#181818",
+                font=("Arial", 15, "bold"),
+                anchor="w",
+            ).pack(anchor="w")
+
+            email = details.get("email", "") or "ingen mail"
+            tk.Label(
+                info,
+                text=f"{details.get('number', '')}  |  {email}",
+                fg="#9d9d9d",
+                bg="#181818",
+                font=("Arial", 11),
+                anchor="w",
+            ).pack(anchor="w")
+
+            tk.Label(
+                row,
+                text=details.get("tag", "MioOS kontakt"),
+                fg="lime",
+                bg="#181818",
+                font=("Arial", 10, "bold"),
+            ).pack(side="right", padx=12)
+
+            row.bind("<Button-1>", lambda event, n=name: select_contact(n))
+            for child in row.winfo_children():
+                child.bind("<Button-1>", lambda event, n=name: select_contact(n))
 
     search_var.trace_add("write", lambda *args: refresh_contacts())
-
-    add_frame = tk.Frame(contacts_screen, bg="#111111")
-    add_frame.pack(pady=25)
-
-    tk.Label(
-        add_frame,
-        text="LÄGG TILL KONTAKT",
-        fg="white",
-        bg="#111111",
-        font=("Arial", 16, "bold"),
-    ).pack(pady=5)
-
-    form = tk.Frame(add_frame, bg="#111111")
-    form.pack()
-
-    name_entry = tk.Entry(form, font=("Arial", 16), width=20, fg="black")
-    name_entry.insert(0, "Namn")
-    name_entry.grid(row=0, column=0, padx=5)
-
-    number_entry = tk.Entry(form, font=("Arial", 16), width=20, fg="black")
-    number_entry.insert(0, "Nummer")
-    number_entry.grid(row=0, column=1, padx=5)
-
-    def clear_name(event):
-        if name_entry.get() == "Namn":
-            name_entry.delete(0, tk.END)
-
-    def clear_number(event):
-        if number_entry.get() == "Nummer":
-            number_entry.delete(0, tk.END)
-
-    name_entry.bind("<FocusIn>", clear_name)
-    number_entry.bind("<FocusIn>", clear_number)
-
-    def add_contact_gui(event=None):
-        name = name_entry.get().strip()
-        number = number_entry.get().strip()
-
-        if name == "" or number == "" or name == "Namn" or number == "Nummer":
-            messagebox.showerror("Error", "Fyll i båda fälten")
-            return
-
-        if name in contacts:
-            messagebox.showerror("Error", "Kontakt finns redan")
-            return
-
-        contacts[name] = number
-        save_to_csv()
-        update_total_contacts()
-
-        name_entry.delete(0, tk.END)
-        number_entry.delete(0, tk.END)
-
-        name_entry.insert(0, "Namn")
-        number_entry.insert(0, "Nummer")
-
-        refresh_contacts()
-
-    tk.Button(
-        add_frame,
-        text="ADD",
-        bg="lime",
-        fg="black",
-        font=("Arial", 14, "bold"),
-        width=15,
-        command=add_contact_gui,
-    ).pack(pady=10)
-
-    number_entry.bind("<Return>", add_contact_gui)
+    fields["number"].bind("<Return>", save_contact_gui)
+    fields["email"].bind("<Return>", save_contact_gui)
 
     refresh_contacts()
 
     tk.Button(
         contacts_screen,
         text="BACK",
-        bg="gray",
+        bg="#2f2f2f",
         fg="white",
         font=("Arial", 18),
         command=contacts_screen.destroy,
