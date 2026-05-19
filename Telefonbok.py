@@ -6,13 +6,16 @@ from pathlib import Path
 from tkinter import messagebox
 
 import pygame
+from PIL import Image, ImageTk
 
 
 BASE_DIR = Path(__file__).resolve().parent
 CONTACTS_FILE = BASE_DIR / "contacts.csv"
 RINGTONE_FILE = BASE_DIR / "ringtone.mp3"
+ICONS_DIR = BASE_DIR / "assets" / "icons"
 
 contacts = {}
+icon_cache = {}
 
 
 def load_from_csv():
@@ -81,8 +84,18 @@ except pygame.error:
 
 root = tk.Tk()
 root.title("GhostOS Mobile")
-root.attributes("-fullscreen", True)
 root.configure(bg="black")
+
+
+def set_start_fullscreen():
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    root.geometry(f"{screen_width}x{screen_height}+0+0")
+    root.state("zoomed")
+    root.attributes("-fullscreen", True)
+
+
+set_start_fullscreen()
 
 current_time = tk.StringVar()
 total_contacts = tk.StringVar()
@@ -96,6 +109,82 @@ def update_time():
 
 
 threading.Thread(target=update_time, daemon=True).start()
+
+
+def open_placeholder_app(title, subtitle, accent="#6aa9ff"):
+    screen = tk.Frame(root, bg="#050505")
+    screen.place(relwidth=1, relheight=1)
+
+    status_bar = tk.Frame(screen, bg="#111111", height=52)
+    status_bar.pack(fill="x")
+    status_bar.pack_propagate(False)
+
+    tk.Label(
+        status_bar,
+        text=title,
+        fg=accent,
+        bg="#111111",
+        font=("Arial", 14, "bold"),
+    ).pack(side="left", padx=20, pady=10)
+
+    tk.Label(
+        status_bar,
+        textvariable=current_time,
+        fg="white",
+        bg="#111111",
+        font=("Arial", 16, "bold"),
+    ).pack(side="right", padx=20, pady=10)
+
+    content = tk.Frame(screen, bg="#050505")
+    content.pack(fill="both", expand=True, padx=54, pady=36)
+
+    tk.Label(
+        content,
+        text=title,
+        fg="white",
+        bg="#050505",
+        font=("Arial", 36, "bold"),
+    ).pack(anchor="w")
+
+    tk.Label(
+        content,
+        text=subtitle,
+        fg="#8c8c8c",
+        bg="#050505",
+        font=("Arial", 14),
+    ).pack(anchor="w", pady=(8, 0))
+
+    tk.Label(
+        content,
+        text="Den har sidan ar en OS-demo och kan byggas ut senare.",
+        fg=accent,
+        bg="#050505",
+        font=("Arial", 14, "bold"),
+    ).pack(anchor="w", pady=(28, 0))
+
+    tk.Button(
+        screen,
+        text="BACK",
+        bg="#2f2f2f",
+        fg="white",
+        font=("Arial", 18),
+        command=screen.destroy,
+    ).pack(side="bottom", pady=26)
+
+
+def load_icon(filename, size=(120, 120)):
+    cache_key = (filename, size)
+    if cache_key in icon_cache:
+        return icon_cache[cache_key]
+
+    icon_path = ICONS_DIR / filename
+    if not icon_path.exists():
+        return None
+
+    image = Image.open(icon_path).convert("RGBA")
+    image = image.resize(size, Image.Resampling.LANCZOS)
+    icon_cache[cache_key] = ImageTk.PhotoImage(image)
+    return icon_cache[cache_key]
 
 
 def fake_call(name, number):
@@ -122,26 +211,32 @@ def fake_call(name, number):
         font=("Arial", 16, "bold"),
     ).pack(side="right", padx=20, pady=10)
 
+    call_body = tk.Frame(call_screen, bg="#050505")
+    call_body.pack(fill="both", expand=True, padx=60, pady=24)
+
     tk.Label(
-        call_screen,
-        text="UTGÅENDE SAMTAL",
+        call_body,
+        text="UTGAENDE SAMTAL",
         fg="lime",
         bg="#050505",
         font=("Arial", 15, "bold"),
-    ).pack(pady=(34, 18))
+    ).pack(pady=(10, 18))
+
+    avatar_shell = tk.Frame(call_body, bg="#0f0f0f", bd=1, relief="solid")
+    avatar_shell.pack(pady=(6, 18))
 
     tk.Label(
-        call_screen,
+        avatar_shell,
         text=name[:1].upper() if name else "?",
         fg="black",
         bg="lime",
-        font=("Arial", 42, "bold"),
-        width=4,
+        font=("Arial", 48, "bold"),
+        width=5,
         height=2,
-    ).pack(pady=(12, 24))
+    ).pack(padx=18, pady=18)
 
     tk.Label(
-        call_screen,
+        call_body,
         text=name,
         fg="white",
         bg="#050505",
@@ -149,30 +244,109 @@ def fake_call(name, number):
     ).pack()
 
     tk.Label(
-        call_screen,
-        text=number or "Okänt nummer",
+        call_body,
+        text=number or "Okant nummer",
         fg="#8a8a8a",
         bg="#050505",
         font=("Arial", 20),
-    ).pack(pady=(8, 18))
+    ).pack(pady=(8, 12))
+
+    call_status = tk.StringVar(value="Ringer...")
+    call_timer = tk.StringVar(value="00:00")
+    call_state = {"connected": False, "seconds": 0, "after_id": None}
 
     tk.Label(
-        call_screen,
-        text="Ansluter till kontakt...",
+        call_body,
+        textvariable=call_status,
         fg="#d6ffd6",
         bg="#050505",
-        font=("Arial", 16),
+        font=("Arial", 16, "bold"),
     ).pack()
 
+    tk.Label(
+        call_body,
+        textvariable=call_timer,
+        fg="#8a8a8a",
+        bg="#050505",
+        font=("Arial", 18),
+    ).pack(pady=(6, 22))
+
+    controls = tk.Frame(call_body, bg="#050505")
+    controls.pack(pady=(8, 26))
+
+    mute_state = tk.StringVar(value="MUTE")
+    speaker_state = tk.StringVar(value="HOGTALARE")
+
+    def update_timer():
+        if not call_state["connected"]:
+            return
+        minutes = call_state["seconds"] // 60
+        seconds = call_state["seconds"] % 60
+        call_timer.set(f"{minutes:02d}:{seconds:02d}")
+        call_state["seconds"] += 1
+        call_state["after_id"] = call_screen.after(1000, update_timer)
+
+    def connect_call():
+        call_state["connected"] = True
+        call_state["seconds"] = 0
+        call_status.set("Ansluten")
+        update_timer()
+
+    def toggle_mute():
+        mute_state.set("UNMUTE" if mute_state.get() == "MUTE" else "MUTE")
+
+    def toggle_speaker():
+        speaker_state.set(
+            "HOGTALARE AV" if speaker_state.get() == "HOGTALARE" else "HOGTALARE"
+        )
+
+    def open_keypad():
+        messagebox.showinfo(
+            "Knappsats",
+            "Knappsatsen kan byggas ut senare.\nJust nu ar detta en realistisk demo-vy.",
+        )
+
     def stop_call():
+        if call_state["after_id"] is not None:
+            call_screen.after_cancel(call_state["after_id"])
         stop_ringtone()
         call_screen.destroy()
 
+    def make_control(parent, textvariable=None, text=None, command=None, bg="#171717"):
+        return tk.Button(
+            parent,
+            text=text,
+            textvariable=textvariable,
+            command=command,
+            bg=bg,
+            fg="white",
+            activebackground="#262626",
+            activeforeground="white",
+            relief="flat",
+            font=("Arial", 13, "bold"),
+            width=14,
+            height=2,
+        )
+
+    make_control(controls, textvariable=mute_state, command=toggle_mute).grid(
+        row=0, column=0, padx=10, pady=10
+    )
+    make_control(
+        controls, textvariable=speaker_state, command=toggle_speaker
+    ).grid(row=0, column=1, padx=10, pady=10)
+    make_control(controls, text="KNAPPSATS", command=open_keypad).grid(
+        row=1, column=0, padx=10, pady=10
+    )
+    make_control(controls, text="KONTAKTINFO", bg="#102410").grid(
+        row=1, column=1, padx=10, pady=10
+    )
+
     play_ringtone()
+    call_screen.after(2200, connect_call)
 
     tk.Button(
         call_screen,
-        text="LÄGG PÅ",
+        text="AVSLUTA",
         bg="red",
         fg="white",
         font=("Arial", 20, "bold"),
@@ -740,6 +914,14 @@ topbar.pack(fill="x")
 
 tk.Label(
     topbar,
+    text="4G  |  WiFi  |  87%",
+    fg="#a4fca4",
+    bg="#111111",
+    font=("Arial", 12, "bold"),
+).pack(side="left", padx=20)
+
+tk.Label(
+    topbar,
     textvariable=current_time,
     fg="white",
     bg="#111111",
@@ -747,56 +929,158 @@ tk.Label(
 ).pack(side="right", padx=20)
 
 home = tk.Frame(root, bg="black")
-home.pack(expand=True)
+home.pack(fill="both", expand=True)
+
+wallpaper = tk.Frame(home, bg="black")
+wallpaper.pack(fill="both", expand=True, padx=26, pady=(18, 24))
+
+hero = tk.Frame(wallpaper, bg="black")
+hero.pack(fill="x", pady=(8, 24))
 
 tk.Label(
-    home,
+    hero,
     text="MioOS",
     fg="lime",
     bg="black",
     font=("Arial", 45, "bold"),
-).pack(pady=50)
+).pack(anchor="w")
 
-tk.Button(
-    home,
-    text="KONTAKTER",
-    bg="#1f1f1f",
-    fg="white",
-    font=("Arial", 25),
-    width=18,
-    height=3,
-    command=open_contacts,
-).pack(pady=20)
+tk.Label(
+    hero,
+    text="Telefonen ar redo. Oppna appar fran hemskarmen.",
+    fg="#7f7f7f",
+    bg="black",
+    font=("Arial", 14),
+).pack(anchor="w", pady=(4, 0))
 
-tk.Button(
-    home,
-    text="RING KONTAKTER",
-    bg="#1f1f1f",
-    fg="white",
-    font=("Arial", 20),
-    width=25,
-    height=2,
-    command=open_ring_menu,
-).pack(pady=10)
+summary_card = tk.Frame(wallpaper, bg="#101010", bd=1, relief="solid")
+summary_card.pack(fill="x", pady=(0, 22))
 
-tk.Button(
-    home,
-    textvariable=total_contacts,
-    bg="#1f1f1f",
+tk.Label(
+    summary_card,
+    text="SYSTEMOVERSIKT",
     fg="lime",
-    font=("Arial", 20),
-    width=25,
-    height=2,
-).pack(pady=20)
+    bg="#101010",
+    font=("Arial", 12, "bold"),
+).pack(anchor="w", padx=18, pady=(14, 4))
+
+tk.Label(
+    summary_card,
+    textvariable=total_contacts,
+    fg="white",
+    bg="#101010",
+    font=("Arial", 24, "bold"),
+).pack(anchor="w", padx=18, pady=(0, 14))
+
+app_grid = tk.Frame(wallpaper, bg="black")
+app_grid.pack(fill="both", expand=True)
+app_grid.columnconfigure(0, weight=1)
+app_grid.columnconfigure(1, weight=1)
+app_grid.rowconfigure(0, weight=1)
+app_grid.rowconfigure(1, weight=1)
+
+
+def create_home_icon(parent, row, column, icon_file, label, command):
+    card = tk.Frame(parent, bg="#141414", bd=1, relief="solid")
+    card.grid(row=row, column=column, sticky="nsew", padx=14, pady=14)
+
+    icon_image = load_icon(icon_file)
+
+    tk.Button(
+        card,
+        image=icon_image,
+        command=command,
+        bg="#141414",
+        activebackground="#141414",
+        relief="flat",
+        bd=0,
+        highlightthickness=0,
+    ).pack(pady=(20, 12))
+
+    tk.Label(
+        card,
+        text=label,
+        fg="white",
+        bg="#141414",
+        font=("Arial", 15, "bold"),
+    ).pack()
+
+    tk.Label(
+        card,
+        text="Tryck for att oppna",
+        fg="#8c8c8c",
+        bg="#141414",
+        font=("Arial", 11),
+    ).pack(pady=(4, 18))
+
+
+create_home_icon(app_grid, 0, 0, "phone_ios.png", "Telefon", open_ring_menu)
+create_home_icon(app_grid, 0, 1, "contacts_ios.png", "Kontakter", open_contacts)
+create_home_icon(
+    app_grid,
+    1,
+    0,
+    "messages_ios.png",
+    "Meddelanden",
+    lambda: open_placeholder_app("Meddelanden", "Konversationer och notiser.", "#7fb6ff"),
+)
+create_home_icon(
+    app_grid,
+    1,
+    1,
+    "settings_ios.png",
+    "Installningar",
+    lambda: open_placeholder_app("Installningar", "System, ljud och visning.", "#ffd36c"),
+)
+
+dock = tk.Frame(wallpaper, bg="#111111", bd=1, relief="solid")
+dock.pack(fill="x", pady=(18, 0))
 
 tk.Button(
-    home,
-    text="EXIT",
-    bg="red",
+    dock,
+    text="Telefon",
+    bg="#111111",
+    fg="lime",
+    activebackground="#1f1f1f",
+    activeforeground="white",
+    relief="flat",
+    font=("Arial", 14, "bold"),
+    command=open_ring_menu,
+).pack(side="left", expand=True, fill="x", padx=12, pady=14)
+
+tk.Button(
+    dock,
+    text="Kontakter",
+    bg="#111111",
     fg="white",
-    font=("Arial", 20),
-    width=10,
+    activebackground="#1f1f1f",
+    activeforeground="white",
+    relief="flat",
+    font=("Arial", 14, "bold"),
+    command=open_contacts,
+).pack(side="left", expand=True, fill="x", padx=12, pady=14)
+
+tk.Button(
+    dock,
+    text="Hem",
+    bg="#111111",
+    fg="#9e9e9e",
+    activebackground="#1f1f1f",
+    activeforeground="white",
+    relief="flat",
+    font=("Arial", 14, "bold"),
+).pack(side="left", expand=True, fill="x", padx=12, pady=14)
+
+tk.Button(
+    dock,
+    text="Stang",
+    bg="#111111",
+    fg="#ff8f8f",
+    activebackground="#1f1f1f",
+    activeforeground="white",
+    relief="flat",
+    font=("Arial", 14, "bold"),
     command=root.destroy,
-).pack(pady=50)
+).pack(side="left", expand=True, fill="x", padx=12, pady=14)
 
 root.mainloop()
