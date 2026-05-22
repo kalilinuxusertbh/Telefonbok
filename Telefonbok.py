@@ -14,11 +14,27 @@ CONTACTS_FILE = BASE_DIR / "contacts.csv"
 RINGTONE_FILE = BASE_DIR / "ringtone.mp3"
 ICONS_DIR = BASE_DIR / "assets" / "icons"
 
-contacts = {}
+contacts = []
+next_contact_id = 1
 icon_cache = {}
 
 
+def get_next_contact_id():
+    global next_contact_id
+    contact_id = str(next_contact_id)
+    next_contact_id += 1
+    return contact_id
+
+
+def find_contact(contact_id):
+    for contact in contacts:
+        if contact["id"] == contact_id:
+            return contact
+    return None
+
+
 def load_from_csv():
+    global next_contact_id
     if not CONTACTS_FILE.exists() or CONTACTS_FILE.stat().st_size == 0:
         return
 
@@ -30,27 +46,35 @@ def load_from_csv():
             number = (row.get("Number") or "").strip()
 
             if name and number:
-                contacts[name] = {
-                    "number": number,
-                    "email": (row.get("Email") or "").strip(),
-                    "tag": (row.get("Tag") or "MioOS kontakt").strip(),
-                    "notes": (row.get("Notes") or "").strip(),
-                }
+                contact_id = (row.get("ID") or "").strip() or get_next_contact_id()
+                contacts.append(
+                    {
+                        "id": contact_id,
+                        "name": name,
+                        "number": number,
+                        "email": (row.get("Email") or "").strip(),
+                        "tag": (row.get("Tag") or "MioOS kontakt").strip(),
+                        "notes": (row.get("Notes") or "").strip(),
+                    }
+                )
+                if contact_id.isdigit():
+                    next_contact_id = max(next_contact_id, int(contact_id) + 1)
 
 
 def save_to_csv():
     with CONTACTS_FILE.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["Name", "Number", "Email", "Tag", "Notes"])
+        writer.writerow(["ID", "Name", "Number", "Email", "Tag", "Notes"])
 
-        for name, details in contacts.items():
+        for contact in contacts:
             writer.writerow(
                 [
-                    name,
-                    details.get("number", ""),
-                    details.get("email", ""),
-                    details.get("tag", ""),
-                    details.get("notes", ""),
+                    contact.get("id", ""),
+                    contact.get("name", ""),
+                    contact.get("number", ""),
+                    contact.get("email", ""),
+                    contact.get("tag", ""),
+                    contact.get("notes", ""),
                 ]
             )
 
@@ -156,7 +180,7 @@ def open_placeholder_app(title, subtitle, accent="#6aa9ff"):
 
     tk.Label(
         content,
-        text="Den har sidan ar en OS-demo och kan byggas ut senare.",
+        text="bara för att det coolt ut",
         fg=accent,
         bg="#050505",
         font=("Arial", 14, "bold"),
@@ -216,7 +240,7 @@ def fake_call(name, number):
 
     tk.Label(
         call_body,
-        text="UTGAENDE SAMTAL",
+        text="UTGÅENDE SAMTAL",
         fg="lime",
         bg="#050505",
         font=("Arial", 15, "bold"),
@@ -245,7 +269,7 @@ def fake_call(name, number):
 
     tk.Label(
         call_body,
-        text=number or "Okant nummer",
+        text=number or "Okänt nummer",
         fg="#8a8a8a",
         bg="#050505",
         font=("Arial", 20),
@@ -275,7 +299,7 @@ def fake_call(name, number):
     controls.pack(pady=(8, 26))
 
     mute_state = tk.StringVar(value="MUTE")
-    speaker_state = tk.StringVar(value="HOGTALARE")
+    speaker_state = tk.StringVar(value="HÖGTALARE")
 
     def update_timer():
         if not call_state["connected"]:
@@ -297,13 +321,13 @@ def fake_call(name, number):
 
     def toggle_speaker():
         speaker_state.set(
-            "HOGTALARE AV" if speaker_state.get() == "HOGTALARE" else "HOGTALARE"
+            "HOGTALARE AV" if speaker_state.get() == "HÖGTALARE" else "HÖGTALARE"
         )
 
     def open_keypad():
         messagebox.showinfo(
             "Knappsats",
-            "Knappsatsen kan byggas ut senare.\nJust nu ar detta en realistisk demo-vy.",
+            "fake knapp lol",
         )
 
     def stop_call():
@@ -340,20 +364,15 @@ def fake_call(name, number):
     make_control(controls, text="KONTAKTINFO", bg="#102410").grid(
         row=1, column=1, padx=10, pady=10
     )
+    make_control(
+        controls,
+        text="LÄGG PÅ",
+        command=stop_call,
+        bg="#7a1010",
+    ).grid(row=2, column=0, columnspan=2, padx=10, pady=(18, 0), sticky="ew")
 
     play_ringtone()
     call_screen.after(2200, connect_call)
-
-    tk.Button(
-        call_screen,
-        text="AVSLUTA",
-        bg="red",
-        fg="white",
-        font=("Arial", 20, "bold"),
-        width=15,
-        height=2,
-        command=stop_call,
-    ).pack(side="bottom", pady=80)
 
 
 def open_ring_menu():
@@ -430,9 +449,10 @@ def open_ring_menu():
             font=("Arial", 18),
         ).pack(pady=40)
     else:
-        for name, details in contacts.items():
-            number = details.get("number", "")
-            tag = details.get("tag", "MioOS kontakt")
+        for contact in contacts:
+            name = contact.get("name", "")
+            number = contact.get("number", "")
+            tag = contact.get("tag", "MioOS kontakt")
             card = tk.Frame(contacts_list, bg="#181818", bd=1, relief="solid")
             card.pack(fill="x", pady=6)
 
@@ -562,7 +582,7 @@ def open_contacts():
 
     tk.Label(
         search_shell,
-        text="SÖK",
+        text="SOK",
         fg="lime",
         bg="#1d1d1d",
         font=("Arial", 11, "bold"),
@@ -696,42 +716,51 @@ def open_contacts():
         profile_name.config(text="Ny kontakt")
         profile_tag.config(text="MioOS identitet")
 
-    def select_contact(name):
-        details = contacts[name]
-        selected_contact.set(name)
+    def select_contact(contact_id):
+        contact = find_contact(contact_id)
+        if not contact:
+            return
+
+        name = contact.get("name", "")
+        selected_contact.set(contact_id)
         set_entry(fields["name"], name)
-        set_entry(fields["number"], details.get("number", ""))
-        set_entry(fields["email"], details.get("email", ""))
-        set_entry(fields["tag"], details.get("tag", ""))
-        set_entry(fields["notes"], details.get("notes", ""))
+        set_entry(fields["number"], contact.get("number", ""))
+        set_entry(fields["email"], contact.get("email", ""))
+        set_entry(fields["tag"], contact.get("tag", ""))
+        set_entry(fields["notes"], contact.get("notes", ""))
         avatar_label.config(text=name[:1].upper() or "?")
         profile_name.config(text=name)
-        profile_tag.config(text=details.get("tag", "MioOS kontakt"))
+        profile_tag.config(text=contact.get("tag", "MioOS kontakt"))
 
     def delete_selected():
-        name = selected_contact.get()
-        if not name:
+        contact_id = selected_contact.get()
+        if not contact_id:
             messagebox.showerror("Error", "Valj en kontakt att ta bort")
             return
 
-        if name in contacts:
-            del contacts[name]
+        contact = find_contact(contact_id)
+        if contact:
+            contacts.remove(contact)
             save_to_csv()
             update_total_contacts()
             clear_form()
             refresh_contacts()
 
     def call_selected():
-        name = selected_contact.get()
-        if not name:
+        contact_id = selected_contact.get()
+        if not contact_id:
             messagebox.showerror("Error", "Valj en kontakt att ringa")
             return
 
-        number = contacts.get(name, {}).get("number", "")
-        fake_call(name, number)
+        contact = find_contact(contact_id)
+        if not contact:
+            return
+
+        fake_call(contact.get("name", ""), contact.get("number", ""))
 
     def save_contact_gui(event=None):
-        old_name = selected_contact.get()
+        contact_id = selected_contact.get()
+        existing_contact = find_contact(contact_id) if contact_id else None
         name = entry_value(fields["name"])
         number = entry_value(fields["number"])
         email = entry_value(fields["email"])
@@ -749,24 +778,29 @@ def open_contacts():
         if notes == placeholders["notes"]:
             notes = ""
 
-        if old_name and old_name != name:
-            contacts.pop(old_name, None)
+        if existing_contact:
+            existing_contact["name"] = name
+            existing_contact["number"] = number
+            existing_contact["email"] = email
+            existing_contact["tag"] = tag or "MioOS kontakt"
+            existing_contact["notes"] = notes
+        else:
+            contact_id = get_next_contact_id()
+            contacts.append(
+                {
+                    "id": contact_id,
+                    "name": name,
+                    "number": number,
+                    "email": email,
+                    "tag": tag or "MioOS kontakt",
+                    "notes": notes,
+                }
+            )
 
-        if not old_name and name in contacts:
-            messagebox.showerror("Error", "Kontakt finns redan")
-            return
-
-        contacts[name] = {
-            "number": number,
-            "email": email,
-            "tag": tag or "MioOS kontakt",
-            "notes": notes,
-        }
-
-        selected_contact.set(name)
+        selected_contact.set(contact_id)
         save_to_csv()
         update_total_contacts()
-        select_contact(name)
+        select_contact(contact_id)
         refresh_contacts()
 
     button_row = tk.Frame(right_panel, bg="#151515")
@@ -817,14 +851,14 @@ def open_contacts():
             widget.destroy()
 
         search_text = search_var.get().strip().lower()
-        filtered_contacts = {
-            name: details
-            for name, details in contacts.items()
-            if search_text in name.lower()
-            or search_text in details.get("number", "").lower()
-            or search_text in details.get("email", "").lower()
-            or search_text in details.get("tag", "").lower()
-        }
+        filtered_contacts = [
+            contact
+            for contact in contacts
+            if search_text in contact.get("name", "").lower()
+            or search_text in contact.get("number", "").lower()
+            or search_text in contact.get("email", "").lower()
+            or search_text in contact.get("tag", "").lower()
+        ]
 
         if not contacts:
             tk.Label(
@@ -846,13 +880,15 @@ def open_contacts():
             ).pack(pady=40)
             return
 
-        for name, details in filtered_contacts.items():
+        for contact in filtered_contacts:
+            contact_id = contact.get("id", "")
+            name = contact.get("name", "")
             row = tk.Frame(contacts_frame, bg="#181818", bd=1, relief="solid")
             row.pack(fill="x", pady=5)
 
             tk.Label(
                 row,
-                text=name[:1].upper(),
+                text=(name[:1].upper() if name else "?"),
                 bg="lime",
                 fg="black",
                 font=("Arial", 18, "bold"),
@@ -871,10 +907,10 @@ def open_contacts():
                 anchor="w",
             ).pack(anchor="w")
 
-            email = details.get("email", "") or "ingen mail"
+            email = contact.get("email", "") or "ingen mail"
             tk.Label(
                 info,
-                text=f"{details.get('number', '')}  |  {email}",
+                text=f"{contact.get('number', '')}  |  {email}",
                 fg="#9d9d9d",
                 bg="#181818",
                 font=("Arial", 11),
@@ -883,15 +919,15 @@ def open_contacts():
 
             tk.Label(
                 row,
-                text=details.get("tag", "MioOS kontakt"),
+                text=contact.get("tag", "MioOS kontakt"),
                 fg="lime",
                 bg="#181818",
                 font=("Arial", 10, "bold"),
             ).pack(side="right", padx=12)
 
-            row.bind("<Button-1>", lambda event, n=name: select_contact(n))
+            row.bind("<Button-1>", lambda event, cid=contact_id: select_contact(cid))
             for child in row.winfo_children():
-                child.bind("<Button-1>", lambda event, n=name: select_contact(n))
+                child.bind("<Button-1>", lambda event, cid=contact_id: select_contact(cid))
 
     search_var.trace_add("write", lambda *args: refresh_contacts())
     fields["number"].bind("<Return>", save_contact_gui)
@@ -914,7 +950,7 @@ topbar.pack(fill="x")
 
 tk.Label(
     topbar,
-    text="4G  |  WiFi  |  87%",
+    text="4G  |  WiFi  |  67%",
     fg="#a4fca4",
     bg="#111111",
     font=("Arial", 12, "bold"),
@@ -947,7 +983,7 @@ tk.Label(
 
 tk.Label(
     hero,
-    text="Telefonen ar redo. Oppna appar fran hemskarmen.",
+    text="Telefonen är redo. Öppna appar fran hemskärmen.",
     fg="#7f7f7f",
     bg="black",
     font=("Arial", 14),
@@ -958,7 +994,7 @@ summary_card.pack(fill="x", pady=(0, 22))
 
 tk.Label(
     summary_card,
-    text="SYSTEMOVERSIKT",
+    text="SYSTEMÖVERSIKT",
     fg="lime",
     bg="#101010",
     font=("Arial", 12, "bold"),
@@ -1030,7 +1066,7 @@ create_home_icon(
     1,
     "settings_ios.png",
     "Installningar",
-    lambda: open_placeholder_app("Installningar", "System, ljud och visning.", "#ffd36c"),
+    lambda: open_placeholder_app("Inställningar", "System, ljud och visning.", "#ffd36c"),
 )
 
 dock = tk.Frame(wallpaper, bg="#111111", bd=1, relief="solid")
